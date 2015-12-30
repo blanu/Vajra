@@ -4,7 +4,39 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"bufio"
+	"time"
+	"encoding/binary"
 )
+
+func main() {
+	fmt.Println("Launching server...")
+	ln, listenErr := net.Listen("tcp", ":10001")
+	CheckError(listenErr)
+
+	for {
+		fmt.Println("Accepting connection...")
+    conn, acceptErr := ln.Accept()
+		fmt.Println("Accepted connection.")
+		CheckError(acceptErr)
+
+		stopDetecting := make(chan bool)
+		go detectPorts(conn, stopDetecting)
+
+    fmt.Println("Reading...")
+		reader := bufio.NewReader(conn)
+		var selectedPort uint16
+		readErr := binary.Read(reader, binary.LittleEndian, &selectedPort)
+		fmt.Println("Read.")
+		stopDetecting <- true
+		CheckError(readErr)
+
+    if readErr == nil {
+			fmt.Println("Selected port", selectedPort)
+			capturePort(selectedPort)
+		}
+	}
+}
 
 /* A Simple function to verify error */
 func CheckError(err error) {
@@ -14,24 +46,22 @@ func CheckError(err error) {
 	}
 }
 
-func main() {
-	/* Lets prepare a address at any address at port 10001*/
-	ServerAddr, err := net.ResolveUDPAddr("udp", ":10001")
-	CheckError(err)
-
-	/* Now listen at selected port */
-	ServerConn, err := net.ListenUDP("udp", ServerAddr)
-	CheckError(err)
-	defer ServerConn.Close()
-
-	buf := make([]byte, 2048)
-
+func detectPorts(conn net.Conn, stopDetecting chan bool) {
 	for {
-		n, addr, err := ServerConn.ReadFromUDP(buf)
-		fmt.Println("Received ", string(buf[0:n]), " from ", addr)
-
-		if err != nil {
-			fmt.Println("Error: ", err)
+		select {
+			case <-stopDetecting:
+				 return
+			default:
+				fmt.Println("detecting...")
+				time.Sleep(1000 * time.Millisecond)
 		}
 	}
+}
+
+func capturePort(port uint16) {
+	fmt.Println("Capturing port", port)
+	for {
+		fmt.Println("capturing...", port)
+		time.Sleep(1000 * time.Millisecond)
+  }
 }
