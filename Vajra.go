@@ -20,11 +20,13 @@ func main() {
 		fmt.Println("Accepted connection.")
 		CheckError(acceptErr)
 
+		reader := bufio.NewReader(conn)
+		writer := bufio.NewWriter(conn)
+
 		stopDetecting := make(chan bool)
-		go detectPorts(conn, stopDetecting)
+		go detectPorts(writer, stopDetecting)
 
     fmt.Println("Reading...")
-		reader := bufio.NewReader(conn)
 		var selectedPort uint16
 		readErr := binary.Read(reader, binary.LittleEndian, &selectedPort)
 		fmt.Println("Read.")
@@ -33,7 +35,7 @@ func main() {
 
     if readErr == nil {
 			fmt.Println("Selected port", selectedPort)
-			capturePort(selectedPort)
+			capturePort(selectedPort, writer)
 		}
 	}
 }
@@ -46,22 +48,38 @@ func CheckError(err error) {
 	}
 }
 
-func detectPorts(conn net.Conn, stopDetecting chan bool) {
+func detectPorts(writer *bufio.Writer, stopDetecting chan bool) {
+	var detectedPort uint16 = 80
+	binary.Write(writer, binary.LittleEndian, detectedPort)
+
+	detectedPort = 443
+	binary.Write(writer, binary.LittleEndian, detectedPort)
+
+	detectedPort = 1234
+	binary.Write(writer, binary.LittleEndian, detectedPort)
+
 	for {
 		select {
 			case <-stopDetecting:
 				 return
 			default:
 				fmt.Println("detecting...")
+				writer.Flush()
 				time.Sleep(1000 * time.Millisecond)
 		}
 	}
 }
 
-func capturePort(port uint16) {
+func capturePort(port uint16, writer *bufio.Writer) {
+	var count uint16 = 0
+
 	fmt.Println("Capturing port", port)
 	for {
-		fmt.Println("capturing...", port)
+		fmt.Println("capturing...", port, count)
+		count = count + 1
+		binary.Write(writer, binary.LittleEndian, count)
+		writer.Flush()
+
 		time.Sleep(1000 * time.Millisecond)
   }
 }
