@@ -18,7 +18,9 @@ func main() {
 		fmt.Println("Accepting connection...")
     conn, acceptErr := ln.Accept()
 		fmt.Println("Accepted connection.")
-		CheckError(acceptErr)
+		if acceptErr != nil {
+			continue
+		}
 
 		reader := bufio.NewReader(conn)
 		writer := bufio.NewWriter(conn)
@@ -31,7 +33,6 @@ func main() {
 		readErr := binary.Read(reader, binary.LittleEndian, &selectedPort)
 		fmt.Println("Read.")
 		stopDetecting <- true
-		CheckError(readErr)
 
     if readErr == nil {
 			fmt.Println("Selected port", selectedPort)
