@@ -78,8 +78,15 @@ func capturePort(port uint16, writer *bufio.Writer) {
 	for {
 		fmt.Println("capturing...", port, count)
 		count = count + 1
-		binary.Write(writer, binary.LittleEndian, count)
-		writer.Flush()
+		writeErr := binary.Write(writer, binary.LittleEndian, count)
+		if writeErr != nil {
+			return
+		}
+
+		flushErr := writer.Flush()
+		if flushErr != nil {
+			return
+		}
 
 		time.Sleep(1000 * time.Millisecond)
   }
