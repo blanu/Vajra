@@ -41,14 +41,19 @@ func main() {
 	}
 
 	mode = os.Args[1]
-	captureName = os.Args[2]
 
 	if mode == "capture" {
-		dataset = os.Args[3]
+		dataset = os.Args[2]
+
+		var allowBlock bool = false
+		if os.Args[3] == "allow" {
+			allowBlock = true
+		}
+
 		if len(os.Args) > 4 {
-			capture(captureName, dataset, &os.Args[4])
+			capture(dataset, allowBlock, &os.Args[4])
 		} else {
-			capture(captureName, dataset, nil)
+			capture(dataset, allowBlock, nil)
 		}
 	} else if mode == "rules" {
 		rules(captureName)
@@ -57,7 +62,7 @@ func main() {
 	}
 }
 
-func capture(captureName string, dataset string, port *string) {
+func capture(dataset string, allowBlock bool, port *string) {
 	var lab adversarylab.Client
 	var err error
 	var input string
@@ -116,7 +121,7 @@ func capture(captureName string, dataset string, port *string) {
 	stopCapturing := make(chan bool)
 	recordable := make(chan gopacket.Packet)
 	go capturePort(selectedPort, packetChannel, captured, stopCapturing, recordable)
-	go saveCaptured(lab, captureName, dataset, stopCapturing, recordable, selectedPort)
+	go saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable, selectedPort)
 
 	fmt.Println("Press Enter to stop capturing.")
 	_, _ = reader.ReadString('\n')
@@ -129,8 +134,10 @@ func capture(captureName string, dataset string, port *string) {
 
 func usage() {
 	fmt.Println("vajra-cli capture [protocol] [dataset] <port>")
-	fmt.Println("Example: vajra-client capture HTTP testing")
-	fmt.Println("Example: vajra-client capture HTTP testing 80")
+	fmt.Println("Example: vajra-cli capture testing allow")
+	fmt.Println("Example: vajra-cli capture testing allow 80")
+	fmt.Println("Example: vajra-cli capture testing block")
+	fmt.Println("Example: vajra-cli capture testing block 443")
 	fmt.Println()
 	fmt.Println("vajra-cli rules [protocol]")
 	fmt.Println("Example: vajra-client rules HTTP")
@@ -163,16 +170,7 @@ func rules(captureName string) {
 	cache := make(map[string][2][]byte)
 
 	for currentRule := range lab.Rules {
-		parts := strings.Split(currentRule.Path, "-")
-		if len(parts) < 3 {
-			continue
-		}
-
-		protocol := parts[0]
-		dataset := parts[1]
-		incoming := parts[2] == "incoming"
-
-		name := protocol + "-" + dataset
+		name := currentRule.Dataset
 
 		var entry [2][]byte
 		var ok bool
@@ -181,7 +179,7 @@ func rules(captureName string) {
 			entry = [2][]byte{make([]byte, 0), make([]byte, 0)}
 		}
 
-		if incoming {
+		if currentRule.Incoming {
 			entry[0] = currentRule.Sequence
 		} else {
 			entry[1] = currentRule.Sequence
@@ -201,6 +199,7 @@ func rules(captureName string) {
 			incomingInts[index] = int(value)
 		}
 
+		// FIXME - use RequireForbid field
 		rule := make(map[string]interface{}, 4)
 		rule["rule_type"] = "adversary labs"
 		rule["action"] = "block"
@@ -345,7 +344,7 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]gopacket.Packe
 	}
 }
 
-func saveCaptured(lab adversarylab.Client, name string, dataset string, stopCapturing chan bool, recordable chan gopacket.Packet, port layers.TCPPort) {
+func saveCaptured(lab adversarylab.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan gopacket.Packet, port layers.TCPPort) {
 	fmt.Println("Saving captured byte sequences... ")
 
 	for {
@@ -360,7 +359,7 @@ func saveCaptured(lab adversarylab.Client, name string, dataset string, stopCapt
 				data := app.Payload()
 				fmt.Println()
 				fmt.Println(data)
-				lab.AddPacket(name, dataset, incoming, data)
+				lab.AddTrainPacket(dataset, allowBlock, incoming, data)
 			}
 		}
 	}
